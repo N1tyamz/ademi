@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowRight, Check, Heart, Mail, Music2, Pause, Play, Volume2, VolumeX } from 'lucide-react'
+import { ArrowRight, Check, Heart, Mail, Music2, PartyPopper, Pause, Play, Sparkles, Volume2, VolumeX } from 'lucide-react'
 import { bouquetCaption, finalMessage, noteMessage, trackGroups, type Track } from './birthday-data'
 
 const stageLabels = ['Start', 'Make a wish', 'Flowers', 'Mixtape', 'A note for you']
@@ -28,6 +28,7 @@ export function BirthdayExperience() {
   const [micMessage, setMicMessage] = useState('')
   const [noteOpen, setNoteOpen] = useState(false)
   const [muted, setMuted] = useState(false)
+  const [partyMode, setPartyMode] = useState(false)
   const [activeTrackId, setActiveTrackId] = useState<string | null>(null)
   const [isTrackPlaying, setIsTrackPlaying] = useState(false)
   const [loadingTrackId, setLoadingTrackId] = useState<string | null>(null)
@@ -193,7 +194,7 @@ export function BirthdayExperience() {
 
   const requestMicrophone = useCallback(async () => {
     if (microphoneRef.current) {
-      setMicMode('listening', 'Your mic is ready. Give the candles a gentle blow—or tap them one by one.')
+      setMicMode('listening', 'Your mic is ready. Give the candles a gentle blow or tap them one by one.')
       return
     }
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -203,7 +204,7 @@ export function BirthdayExperience() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } })
       microphoneRef.current = stream
-      setMicMode('listening', 'Your mic is ready. Give the candles a gentle blow—or tap them one by one.')
+      setMicMode('listening', 'Your mic is ready. Give the candles a gentle blow or tap them one by one.')
     } catch {
       setMicMode('fallback', 'No mic? No problem. Tap each candle flame to blow it out.')
     }
@@ -334,7 +335,7 @@ export function BirthdayExperience() {
         setIsTrackPlaying(true)
       } catch {
         setIsTrackPlaying(false)
-        setTrackError({ id: track.id, message: 'Preview ready—tap play once more to start it.' })
+        setTrackError({ id: track.id, message: 'Preview ready. Tap play once more to start it.' })
       }
     } catch {
       if (requestId === previewRequestRef.current) {
@@ -367,8 +368,9 @@ export function BirthdayExperience() {
   }, [])
 
   return (
-    <main className={`birthday-shell stage-${stage}`}>
+    <main className={`birthday-shell stage-${stage} ${partyMode ? 'party-mode' : ''}`}>
       <div className="paper-grain" aria-hidden="true" />
+      {partyMode && <div className="party-confetti" aria-hidden="true">{Array.from({ length: 42 }, (_, index) => <i key={index} style={{ left: `${(index * 37) % 100}%`, animationDelay: `-${(index % 17) / 2}s`, animationDuration: `${2.3 + (index % 5) * 0.35}s`, backgroundColor: ['#dc766b', '#efd279', '#a4b89b', '#b4a4c7', '#9bb3c2', '#e9b793'][index % 6] }} />)}</div>}
       <div className="floating-spark spark-one" aria-hidden="true">*</div>
       <div className="floating-spark spark-two" aria-hidden="true">*</div>
       <div className="floating-spark spark-three" aria-hidden="true">*</div>
@@ -379,6 +381,10 @@ export function BirthdayExperience() {
           <span>ADEMI.EXE</span>
         </div>
         <div className="topbar-actions">
+          <button className={`party-toggle pixel-button ${partyMode ? 'is-on' : ''}`} type="button" onClick={() => setPartyMode((value) => !value)} aria-pressed={partyMode} aria-label={partyMode ? 'Turn party mode off' : 'Turn party mode on'}>
+            {partyMode ? <Sparkles size={14} aria-hidden="true" /> : <PartyPopper size={14} aria-hidden="true" />}
+            <span>{partyMode ? 'PARTY ON' : 'PARTY MODE'}</span>
+          </button>
           {stage > 1 && (
             <button className="sound-toggle pixel-button" type="button" onClick={() => setMuted((value) => !value)} aria-pressed={muted} aria-label={muted ? 'Unmute background music' : 'Mute background music'}>
               {muted ? <VolumeX size={15} aria-hidden="true" /> : <Volume2 size={15} aria-hidden="true" />}
@@ -393,7 +399,7 @@ export function BirthdayExperience() {
         <div className="frame-topline">
           <span className="window-dots" aria-hidden="true"><i /><i /><i /></span>
           <span className="frame-title">A LITTLE SOMETHING FOR YOU</span>
-          <span className="frame-date">NOV 18, 2026</span>
+          <span className="frame-date">NOV 19, 2026</span>
         </div>
 
         {stage > 1 && (
@@ -418,7 +424,7 @@ export function BirthdayExperience() {
             <div className="start-window">
               <div className="window-bar"><span>hello_ademi.txt</span><span aria-hidden="true">▢ ×</span></div>
               <div className="start-window-content">
-                <div className="birthday-stamp"><span>18</span><small>NOV</small></div>
+                <div className="birthday-stamp"><span>19</span><small>NOV</small></div>
                 <p className="eyebrow"><span className="tiny-star">*</span> A NOTE FROM YOUR FAVORITE HUMAN (MAYBE)</p>
                 <h1 id="start-title">A little<br /><em>birthday</em><br />magic.</h1>
                 <p className="start-copy">Hey Ademi. Someone made a little corner of the internet just for you today.</p>
@@ -426,6 +432,11 @@ export function BirthdayExperience() {
                   <span>OPEN IT</span><ArrowRight size={16} aria-hidden="true" />
                 </button>
                 <span className="button-hint">NO PASSWORD NEEDED <Heart size={10} aria-hidden="true" /></span>
+                <ul className="birthday-vitals" aria-label="Birthday day details">
+                  <li><Heart size={14} aria-hidden="true" /><span><small>THE DATE</small><strong>NOV 19</strong></span></li>
+                  <li><Sparkles size={14} aria-hidden="true" /><span><small>VIBE CHECK</small><strong>100% ADEMI</strong></span></li>
+                  <li><Music2 size={14} aria-hidden="true" /><span><small>SOUNDTRACK</small><strong>READY TO PLAY</strong></span></li>
+                </ul>
               </div>
             </div>
             <div className="start-footnote"><span className="pixel-flower-mini" aria-hidden="true">*</span> MADE WITH A LITTLE TOO MUCH HEART <span className="footnote-line" /></div>
@@ -531,11 +542,11 @@ export function BirthdayExperience() {
             <div className="section-heading mixtape-heading">
               <span className="eyebrow"><span className="eyebrow-square" /> LEVEL 03 <span className="eyebrow-divider">/</span> SIDE A + SIDE B</span>
               <h1 id="mixtape-title">A little<br /><em>mixtape.</em></h1>
-              <p className="mixtape-intro">A mix of your favorites and the songs I dedicate to you—because every single one of these reminds me of your energy, your resilience, and the person you’re becoming.</p>
+              <p className="mixtape-intro">A mix of your favorites and the songs I dedicate to you, because every single one of these reminds me of your energy, your resilience, and the person you’re becoming.</p>
             </div>
 
             <div className={`mixtape-deck pixel-border ${isBackgroundMusicPlaying || isTrackPlaying ? 'is-playing' : ''}`}>
-              <div className="deck-topline"><span><Music2 size={13} aria-hidden="true" /> PLAYLIST_18.NOV</span><span>{totalTrackCount} TRACKS</span></div>
+              <div className="deck-topline"><span><Music2 size={13} aria-hidden="true" /> PLAYLIST_19.NOV</span><span>{totalTrackCount} TRACKS</span></div>
               <div className="cassette-display">
                 <div className="cassette-label"><span>FOR ADEMI</span><span>SIDE A <i>*</i> SIDE B</span></div>
                 <div className="cassette-reels" aria-hidden="true"><span><i /></span><b /><span><i /></span></div>
@@ -604,7 +615,7 @@ export function BirthdayExperience() {
               <div className="letter-top"><span>PERSONAL_NOTE.TXT</span><span><i className="letter-heart" /> OPENED WITH LOVE</span></div>
               <div className="letter-paper">
                 <div className="letter-hole" aria-hidden="true"><i /><i /><i /><i /><i /></div>
-                <div className="letter-date">NOVEMBER 18 <span>*</span> YOUR BIRTHDAY</div>
+                <div className="letter-date">NOVEMBER 19 <span>*</span> YOUR BIRTHDAY</div>
                 <div className="letter-copy">{finalMessage.split('\n\n').map((paragraph, index) => index === 0 ? <p className="letter-salutation" key={paragraph}>{paragraph}</p> : <p key={paragraph}>{paragraph}</p>)}</div>
                 <div className="letter-signoff"><span>cheering for you, always</span><Heart size={18} aria-hidden="true" /></div>
                 <div className="letter-doodle" aria-hidden="true">*</div>
