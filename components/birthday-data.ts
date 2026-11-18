@@ -150,6 +150,20 @@ export const trackGroups: { artist: string; featured?: string; tracks: Track[] }
     ],
   },
   {
+    artist: 'Arctic Monkeys',
+    tracks: [
+      {
+        id: 'arctic-secret-door',
+        artist: 'Arctic Monkeys',
+        title: 'Secret Door',
+        album: 'Humbug',
+        lyric: 'A slow-burn, cinematic mystery with a playful edge.',
+        dedication: 'For the hidden little details, unexpected turns, and stories that stay with you.',
+        color: 'blue',
+      },
+    ],
+  },
+  {
     artist: 'Twenty One Pilots',
     tracks: [
       {

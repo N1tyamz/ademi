@@ -8,7 +8,7 @@ const stageLabels = ['Start', 'Make a wish', 'Flowers', 'Mixtape', 'A note for y
 const candlePositions = [13, 30, 47, 64, 81]
 const ambientNotes = [261.63, 329.63, 392, 329.63, 293.66, 349.23, 392, 329.63]
 const normalizeTrackTitle = (value: string) => value.toLocaleLowerCase('en-US').replace(/[^a-z0-9]/g, '')
-const backgroundTrackId = 'halsey-colors'
+const backgroundTrackId = 'arctic-secret-door'
 const totalTrackCount = trackGroups.reduce((count, group) => count + group.tracks.length, 0)
 
 type ItunesTrack = {
@@ -168,7 +168,7 @@ export function BirthdayExperience() {
     const context = audioContextRef.current
     const master = ambientGainRef.current
     if (!context || !master) return
-    const shouldPauseAmbient = muted || (stage >= 4 && (isTrackPlaying || isBackgroundMusicPlaying))
+    const shouldPauseAmbient = muted || isTrackPlaying || isBackgroundMusicPlaying
     master.gain.setTargetAtTime(shouldPauseAmbient ? 0 : 0.055, context.currentTime, 0.12)
   }, [isBackgroundMusicPlaying, isTrackPlaying, muted, stage])
 
@@ -185,7 +185,7 @@ export function BirthdayExperience() {
       audio.src = backgroundTrackUrl
       audio.load()
     }
-    if (stage < 4 || muted || isTrackPlaying) {
+    if (stage < 2 || muted || isTrackPlaying) {
       audio.pause()
       return
     }
@@ -369,6 +369,7 @@ export function BirthdayExperience() {
 
   return (
     <main className={`birthday-shell stage-${stage} ${partyMode ? 'party-mode' : ''}`}>
+      <audio ref={backgroundAudioRef} preload="none" loop onPlay={() => setIsBackgroundMusicPlaying(true)} onPause={() => setIsBackgroundMusicPlaying(false)} aria-label="Arctic Monkeys Secret Door background soundtrack" />
       <div className="paper-grain" aria-hidden="true" />
       {partyMode && <div className="party-confetti" aria-hidden="true">{Array.from({ length: 42 }, (_, index) => <i key={index} style={{ left: `${(index * 37) % 100}%`, animationDelay: `-${(index % 17) / 2}s`, animationDuration: `${2.3 + (index % 5) * 0.35}s`, backgroundColor: ['#dc766b', '#efd279', '#a4b89b', '#b4a4c7', '#9bb3c2', '#e9b793'][index % 6] }} />)}</div>}
       <div className="floating-spark spark-one" aria-hidden="true">*</div>
@@ -557,10 +558,9 @@ export function BirthdayExperience() {
                 <div className="cassette-reels" aria-hidden="true"><span><i /></span><b /><span><i /></span></div>
                 <div className="cassette-tape-line" aria-hidden="true" />
               </div>
-              <div className="deck-footer"><span>NOW PLAYING</span><span>{isBackgroundMusicPlaying ? 'COLORS · HALSEY' : activeTrackId ? trackGroups.flatMap((group) => group.tracks).find((track) => track.id === activeTrackId)?.title ?? 'YOUR MIX' : 'PRESS PLAY TO BEGIN'}</span></div>
+              <div className="deck-footer"><span>NOW PLAYING</span><span>{isBackgroundMusicPlaying ? 'SECRET DOOR · ARCTIC MONKEYS' : activeTrackId ? trackGroups.flatMap((group) => group.tracks).find((track) => track.id === activeTrackId)?.title ?? 'YOUR MIX' : 'PRESS PLAY TO BEGIN'}</span></div>
             </div>
             <audio ref={previewAudioRef} preload="none" onEnded={() => setIsTrackPlaying(false)} aria-label="Song preview audio player" />
-            <audio ref={backgroundAudioRef} preload="none" loop onPlay={() => setIsBackgroundMusicPlaying(true)} onPause={() => setIsBackgroundMusicPlaying(false)} aria-label="Halsey Colors background soundtrack" />
             {catalogLoading && <p className="catalog-status" role="status">Loading album covers and previews…</p>}
             {catalogUnavailable && !catalogLoading && <p className="catalog-status" role="status">Some album covers are unavailable right now, but the mix is ready.</p>}
 
