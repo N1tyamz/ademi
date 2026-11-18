@@ -112,7 +112,7 @@ export const trackGroups: { artist: string; featured?: string; tracks: Track[] }
         title: 'pretty isn’t pretty',
         album: 'GUTS',
         lyric: '“And you can’t ever win, no matter what you do...”',
-        dedication: 'A reminder to stop comparing yourself to impossible standards—you are already more than enough.',
+        dedication: 'A reminder to stop comparing yourself to impossible standards. You are already more than enough.',
         color: 'sage',
       },
     ],
@@ -144,7 +144,7 @@ export const trackGroups: { artist: string; featured?: string; tracks: Track[] }
         title: 'Lonely is the Muse',
         album: 'The Great Impersonator',
         lyric: '“I’ve always been a martyr, I’ve always been a muse...”',
-        dedication: 'You carry so much on your shoulders silently—remember you don’t always have to carry it alone.',
+        dedication: 'You carry so much on your shoulders silently. Remember you don’t always have to carry it alone.',
         color: 'lilac',
       },
     ],
@@ -183,8 +183,8 @@ export const trackGroups: { artist: string; featured?: string; tracks: Track[] }
   },
 ]
 
-export const bouquetCaption = 'Virtual flowers for this year since I can’t come up and hand them to you right now—maybe around Christmas I’ll give them to you in real life (of course, if you don’t ghost me).'
+export const bouquetCaption = 'Virtual flowers for this year since I can’t come up and hand them to you right now. Maybe around Christmas I’ll give them to you in real life (of course, if you don’t ghost me).'
 
-export const noteMessage = 'Happy Birthday, Ademi. I hope your final year of studies goes smoothly and you crush everything on your path to becoming a government official in KZ. More than anything, I hope you finally let go of all the negative things you think about yourself—you’re way more capable than you give yourself credit for.'
+export const noteMessage = 'Happy Birthday, Ademi. I hope your final year of studies goes smoothly and you crush everything on your path to becoming a government official in KZ. More than anything, I hope you finally let go of all the negative things you think about yourself. You’re way more capable than you give yourself credit for.'
 
-export const finalMessage = `Hey Ademi,\n\nI wanted to leave you with something real at the end of this, because I don’t think you realize how clearly I see you—and how much potential you actually have.\n\nI know how hard you push yourself, and I also know how loud those negative thoughts in your head can get when things feel overwhelming. You spend way too much time doubting yourself, overthinking your progress, and complaining about things you think you’re falling short on. From the outside looking in, though? I see someone who is driven, sharp, resilient, and building a future that most people wouldn't even have the discipline to chase. Everything you are working toward right now—every late night, every stressful class, every step toward your goals—is going to be worth it.\n\nStop beating yourself up and stop selling yourself short. This upcoming year is going to be yours, and I genuinely believe you’re going to surprise even yourself with how far you go.\n\nEven though you aren’t religious, I still added you in my prayers today. I prayed that this new year brings you peace of mind, that all the heavy, negative thoughts you carry around finally fade away, and that you get every bit of success and happiness you deserve.\n\nHave the absolute best birthday, Ademi. Keep shining—and remember someone’s always cheering for you.`
+export const finalMessage = `Hey Ademi,\n\nI wanted to leave you with something real at the end of this, because I don’t think you realize how clearly I see you, and how much potential you actually have.\n\nI know how hard you push yourself, and I also know how loud those negative thoughts in your head can get when things feel overwhelming. You spend way too much time doubting yourself, overthinking your progress, and complaining about things you think you’re falling short on. From the outside looking in, though? I see someone who is driven, sharp, resilient, and building a future that most people wouldn't even have the discipline to chase. Everything you are working toward right now,every late night, every stressful class, every step toward your goals,is going to be worth it.\n\nStop beating yourself up and stop selling yourself short. This upcoming year is going to be yours, and I genuinely believe you’re going to surprise even yourself with how far you go.\n\nEven though you aren’t religious, I still added you in my prayers today. I prayed that this new year brings you peace of mind, that all the heavy, negative thoughts you carry around finally fade away, and that you get every bit of success and happiness you deserve.\n\nHave the absolute best birthday, Ademi. Keep shining,and remember someone’s always cheering for you.`

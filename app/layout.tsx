@@ -4,7 +4,7 @@ import './globals.css'
 
 export const metadata: Metadata = {
   title: 'A Little Birthday Magic for Ademi',
-  description: 'A tiny birthday corner of the internet, made just for Ademi—with candles, flowers, songs, and a note to keep.',
+  description: 'A tiny birthday corner of the internet, made just for Ademi on November 19, with candles, flowers, songs, and a note to keep.',
   generator: 'v0.app',
   icons: {
     icon: [

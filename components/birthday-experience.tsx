@@ -15,7 +15,9 @@ type ItunesResponse = {
   results?: ItunesTrack[]
 }
 
-export function BirthdayExperience() {
+const backgroundTrack = trackGroups[0].tracks[0]
+
+export function BirthdayExperience({ initialArtwork }: { initialArtwork: Record<string, string> }) {
   const [stage, setStage] = useState(1)
   const [candlesOut, setCandlesOut] = useState(0)
   const [micStatus, setMicStatus] = useState<'idle' | 'listening' | 'fallback'>('idle')
@@ -23,9 +25,10 @@ export function BirthdayExperience() {
   const [noteOpen, setNoteOpen] = useState(false)
   const [activeTrackId, setActiveTrackId] = useState<string | null>(null)
   const [isTrackPlaying, setIsTrackPlaying] = useState(false)
+  const [isBackgroundMusic, setIsBackgroundMusic] = useState(false)
   const [loadingTrackId, setLoadingTrackId] = useState<string | null>(null)
   const [trackError, setTrackError] = useState<{ id: string; message: string } | null>(null)
-  const [artworkByTrack, setArtworkByTrack] = useState<Record<string, string>>({})
+  const [artworkByTrack, setArtworkByTrack] = useState<Record<string, string>>(initialArtwork)
 
   const audioContextRef = useRef<AudioContext | null>(null)
   const microphoneRef = useRef<MediaStream | null>(null)
@@ -43,7 +46,7 @@ export function BirthdayExperience() {
 
   const requestMicrophone = useCallback(async () => {
     if (microphoneRef.current) {
-      setMicMode('listening', 'Your mic is ready. Give the candles a gentle blow—or tap them one by one.')
+      setMicMode('listening', 'Your mic is ready. Give the candles a gentle blow, or tap them one by one.')
       return
     }
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -58,7 +61,7 @@ export function BirthdayExperience() {
       await context.resume()
       microphoneRef.current = stream
       audioContextRef.current = context
-      setMicMode('listening', 'Your mic is ready. Give the candles a gentle blow—or tap them one by one.')
+      setMicMode('listening', 'Your mic is ready. Give the candles a gentle blow, or tap them one by one.')
     } catch {
       stream?.getTracks().forEach((track) => track.stop())
       void context?.close()
@@ -120,30 +123,47 @@ export function BirthdayExperience() {
     }
   }, [])
 
-  const toggleTrack = useCallback(async (track: Track) => {
+  const toggleTrack = useCallback(async (track: Track, asBackground = false) => {
     const audio = previewAudioRef.current
     if (!audio) return
 
+    if (!asBackground && isBackgroundMusic) {
+      audio.loop = false
+      setIsBackgroundMusic(false)
+    }
+
     if (activeTrackId === track.id && isTrackPlaying) {
+      if (asBackground && !isBackgroundMusic) {
+        audio.loop = true
+        setIsBackgroundMusic(true)
+        return
+      }
       audio.pause()
+      audio.loop = false
       setIsTrackPlaying(false)
+      setIsBackgroundMusic(false)
       return
     }
 
     setTrackError(null)
     if (activeTrackId === track.id && previewSourcesRef.current[track.id]) {
+      audio.loop = asBackground
       try {
         await audio.play()
         setIsTrackPlaying(true)
+        setIsBackgroundMusic(asBackground)
       } catch {
         setIsTrackPlaying(false)
+        setIsBackgroundMusic(false)
         setTrackError({ id: track.id, message: 'Tap play again to start this preview.' })
       }
       return
     }
 
     audio.pause()
+    audio.loop = asBackground
     setIsTrackPlaying(false)
+    setIsBackgroundMusic(false)
     setActiveTrackId(track.id)
     setLoadingTrackId(track.id)
     const requestId = ++previewRequestRef.current
@@ -165,32 +185,39 @@ export function BirthdayExperience() {
       try {
         await audio.play()
         setIsTrackPlaying(true)
+        setIsBackgroundMusic(asBackground)
       } catch {
         setIsTrackPlaying(false)
-        setTrackError({ id: track.id, message: 'Preview ready—tap play once more to start it.' })
+        setIsBackgroundMusic(false)
+        setTrackError({ id: track.id, message: 'Preview ready. Tap play once more to start it.' })
       }
     } catch {
       if (requestId === previewRequestRef.current) {
         setIsTrackPlaying(false)
+        setIsBackgroundMusic(false)
         setTrackError({ id: track.id, message: 'A preview could not load right now. Try again in a moment.' })
       }
     } finally {
       if (requestId === previewRequestRef.current) setLoadingTrackId(null)
     }
-  }, [activeTrackId, isTrackPlaying])
+  }, [activeTrackId, isBackgroundMusic, isTrackPlaying])
 
   const finishMixtape = useCallback(() => {
     previewRequestRef.current += 1
-    previewAudioRef.current?.pause()
-    setIsTrackPlaying(false)
+    if (!isBackgroundMusic) {
+      previewAudioRef.current?.pause()
+      setIsTrackPlaying(false)
+    }
     setLoadingTrackId(null)
     setStage(5)
-  }, [])
+  }, [isBackgroundMusic])
 
   const replayFromStart = useCallback(() => {
     previewRequestRef.current += 1
     previewAudioRef.current?.pause()
+    if (previewAudioRef.current) previewAudioRef.current.loop = false
     setIsTrackPlaying(false)
+    setIsBackgroundMusic(false)
     setActiveTrackId(null)
     setLoadingTrackId(null)
     setTrackError(null)
@@ -205,6 +232,7 @@ export function BirthdayExperience() {
       <div className="floating-spark spark-one" aria-hidden="true">✳</div>
       <div className="floating-spark spark-two" aria-hidden="true">✦</div>
       <div className="floating-spark spark-three" aria-hidden="true">✧</div>
+      <audio ref={previewAudioRef} preload="none" onEnded={() => { setIsTrackPlaying(false); setIsBackgroundMusic(false) }} aria-label="Song preview audio player" />
 
       <header className="topbar">
         <div className="brand-mark">
@@ -212,7 +240,11 @@ export function BirthdayExperience() {
           <span>ADEMI.EXE</span>
         </div>
         <div className="topbar-actions">
-          <span className="version-label">BIRTHDAY BUILD <span>1.0</span></span>
+          <span className="version-label">BIRTHDAY MODE <span>19 NOV</span></span>
+          <button className="pixel-button sound-toggle" type="button" onClick={() => void toggleTrack(backgroundTrack, true)} aria-pressed={isBackgroundMusic} aria-label={`${isBackgroundMusic ? 'Pause' : 'Play'} 10:35 by Tate McRae as background music`} title="10:35 by Tate McRae">
+            {isBackgroundMusic ? <Pause size={13} fill="currentColor" aria-hidden="true" /> : <Music2 size={13} aria-hidden="true" />}
+            <span>{isBackgroundMusic ? 'PAUSE VIBES' : 'PLAY VIBES'}</span>
+          </button>
         </div>
       </header>
 
@@ -220,7 +252,7 @@ export function BirthdayExperience() {
         <div className="frame-topline">
           <span className="window-dots" aria-hidden="true"><i /><i /><i /></span>
           <span className="frame-title">A LITTLE SOMETHING FOR YOU</span>
-          <span className="frame-date">NOV 18, 2026</span>
+          <span className="frame-date">NOV 19, 2026</span>
         </div>
 
         {stage > 1 && (
@@ -245,8 +277,8 @@ export function BirthdayExperience() {
             <div className="start-window">
               <div className="window-bar"><span>hello_ademi.txt</span><span aria-hidden="true">▢ ×</span></div>
               <div className="start-window-content">
-                <div className="birthday-stamp"><span>18</span><small>NOV</small></div>
-                <p className="eyebrow"><span className="tiny-star">✦</span> A NOTE FROM YOUR FAVORITE HUMAN (MAYBE)</p>
+                <div className="birthday-stamp"><span>19</span><small>NOV</small></div>
+                <p className="eyebrow"><span className="tiny-star">✦</span> A NOTE TO MY FAVOURITE HUMAN</p>
                 <h1 id="start-title">A little<br /><em>birthday</em><br />magic.</h1>
                 <p className="start-copy">Hey Ademi. Someone made a little corner of the internet just for you today.</p>
                 <button className="pixel-button primary-button" type="button" onClick={openBirthday}>
@@ -294,7 +326,7 @@ export function BirthdayExperience() {
                 </div>
                 <div className="cake-shadow" aria-hidden="true" />
                 {candlesOut === candlePositions.length && <div className="wish-banner" role="status">MAKE A WISH, ADEMI! <span>✦</span></div>}
-                {candlesOut === candlePositions.length && <div className="confetti" aria-hidden="true">{Array.from({ length: 30 }, (_, index) => <i key={index} style={{ left: `${(index * 37) % 100}%`, animationDelay: `-${(index % 17) / 8}s` }} />)}</div>}
+                {candlesOut === candlePositions.length && <div className="confetti" aria-hidden="true">{Array.from({ length: 48 }, (_, index) => <i key={index} style={{ left: `${(index * 37) % 100}%`, animationDelay: `-${(index % 17) / 8}s` }} />)}</div>}
               </div>
               <div className="cake-panel-bottom">
                 <span className="mic-status"><span className={`mic-indicator ${micStatus}`} />{micStatus === 'listening' ? 'MIC LISTENING' : micStatus === 'fallback' ? 'TAP MODE' : 'SETTING UP MIC'}</span>
@@ -316,12 +348,15 @@ export function BirthdayExperience() {
               <div className="bouquet-spark spark-left" aria-hidden="true">✧</div>
               <div className="bouquet-spark spark-right" aria-hidden="true">✳</div>
               <div className="bouquet-scene" role="img" aria-label="A hand-drawn pixel bouquet tied with a ribbon for Ademi">
-                <div className="bouquet-stems"><i /><i /><i /><i /><i /></div>
+                <div className="bouquet-stems"><i /><i /><i /><i /><i /><i /><i /><i /></div>
                 <div className="flower flower-one"><i /><b /></div>
                 <div className="flower flower-two"><i /><b /></div>
                 <div className="flower flower-three"><i /><b /></div>
                 <div className="flower flower-four"><i /><b /></div>
                 <div className="flower flower-five"><i /><b /></div>
+                <div className="flower flower-six"><i /><b /></div>
+                <div className="flower flower-seven"><i /><b /></div>
+                <div className="flower flower-eight"><i /><b /></div>
                 <div className="leaf leaf-one" /><div className="leaf leaf-two" /><div className="leaf leaf-three" />
                 <div className="bouquet-wrap"><span /><i /><i /></div>
                 <div className="bouquet-ribbon">ADEMI</div>
@@ -339,9 +374,13 @@ export function BirthdayExperience() {
                   <div className="window-bar"><span>for_ademi.note</span><button type="button" onClick={() => setNoteOpen(false)} aria-label="Close note">×</button></div>
                   <div className="note-modal-content">
                     <span className="note-seal" aria-hidden="true">✿</span>
-                    <span className="eyebrow">A NOTE FROM ME TO YOU</span>
+                    <span className="eyebrow">A NOTE TO MY FAVOURITE HUMAN</span>
                     <h2 id="note-title">Happy birthday,<br /><em>Ademi.</em></h2>
                     <p>{noteMessage}</p>
+                    <figure className="name-flower">
+                      <img src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/PHOTO-2026-11-18-16-32-46-w0NWsYvzRtukh6Kr3RmosxcJPeXsi5.jpg" alt="A pastel bouquet illustration with Ademi written on its ribbon" />
+                      <figcaption>Ademi means beautiful. This is the flower I chose to represent the meaning of your name.</figcaption>
+                    </figure>
                     <button className="pixel-button primary-button modal-next" type="button" onClick={() => { setNoteOpen(false); setStage(4) }}>CLOSE &amp; CONTINUE <ArrowRight size={14} aria-hidden="true" /></button>
                   </div>
                 </section>
@@ -355,11 +394,11 @@ export function BirthdayExperience() {
             <div className="section-heading mixtape-heading">
               <span className="eyebrow"><span className="eyebrow-square" /> LEVEL 03 <span className="eyebrow-divider">/</span> SIDE A + SIDE B</span>
               <h1 id="mixtape-title">A little<br /><em>mixtape.</em></h1>
-              <p className="mixtape-intro">A mix of your favorites and the songs I dedicate to you—because every single one of these reminds me of your energy, your resilience, and the person you’re becoming.</p>
+              <p className="mixtape-intro">A mix of your favourites and the songs I dedicate to you, because every single one reminds me of your energy, your resilience, and the person you’re becoming.</p>
             </div>
 
             <div className="mixtape-deck pixel-border">
-              <div className="deck-topline"><span><Music2 size={13} aria-hidden="true" /> PLAYLIST_18.NOV</span><span>15 TRACKS</span></div>
+              <div className="deck-topline"><span><Music2 size={13} aria-hidden="true" /> PLAYLIST_19.NOV</span><span>16 TRACKS</span></div>
               <div className="cassette-display">
                 <div className="cassette-label"><span>FOR ADEMI</span><span>SIDE A <i>✦</i> SIDE B</span></div>
                 <div className="cassette-reels" aria-hidden="true"><span><i /></span><b /><span><i /></span></div>
@@ -367,8 +406,6 @@ export function BirthdayExperience() {
               </div>
               <div className="deck-footer"><span>NOW PLAYING</span><span>{activeTrackId ? trackGroups.flatMap((group) => group.tracks).find((track) => track.id === activeTrackId)?.title ?? 'YOUR MIX' : 'PRESS PLAY TO BEGIN'}</span></div>
             </div>
-            <audio ref={previewAudioRef} preload="none" onEnded={() => setIsTrackPlaying(false)} aria-label="Song preview audio player" />
-
             <div className="track-groups">
               {trackGroups.map((group, groupIndex) => (
                 <section className="artist-group" key={group.artist} aria-labelledby={`artist-${groupIndex}`}>
@@ -384,10 +421,10 @@ export function BirthdayExperience() {
                       const artwork = artworkByTrack[track.id]
                       return (
                         <article className={`track-card ${track.featured ? 'track-featured' : ''}`} key={track.id}>
-                          <div className={`album-art album-${track.color}`}>
-                            {artwork ? <img src={artwork} alt={`${track.album} album artwork`} loading="lazy" /> : <div className="fallback-art" aria-label={`${track.album} album art placeholder`}><span>{track.artist.split(' ').map((word) => word[0]).join('').slice(0, 2)}</span><i>✳</i><b>{String(trackIndex + 1).padStart(2, '0')}</b></div>}
+                          <button className={`album-art album-art-button album-${track.color} ${isPlaying ? 'is-playing' : ''}`} type="button" onClick={() => void toggleTrack(track)} disabled={isLoading} aria-label={`${isPlaying ? 'Pause' : 'Play'} ${track.title} preview from the album cover`}>
+                            {artwork ? <img src={artwork} alt={`${track.album} album artwork`} loading="eager" decoding="async" /> : <div className="fallback-art" aria-hidden="true"><span>{track.artist.split(' ').map((word) => word[0]).join('').slice(0, 2)}</span><i>✳</i><b>{String(trackIndex + 1).padStart(2, '0')}</b></div>}
                             <span className="album-chip">{track.album}</span>
-                          </div>
+                          </button>
                           <div className="track-details">
                             <div className="track-title-row"><h3>{track.title}</h3>{track.featured && <span className="main-song">★ MAIN SONG</span>}</div>
                             {track.featured && <p className="track-feature-note">{track.dedication}</p>}
@@ -421,10 +458,10 @@ export function BirthdayExperience() {
               <h1 id="final-title">A note to<br /><em>keep.</em></h1>
             </div>
             <article className="letter-card">
-              <div className="letter-top"><span>PERSONAL_NOTE.TXT</span><span><i className="letter-heart" /> OPENED WITH LOVE</span></div>
+              <div className="letter-top"><span>PERSONAL_NOTE.TXT</span><span><i className="letter-heart" /> OPENED WITH CARE</span></div>
               <div className="letter-paper">
                 <div className="letter-hole" aria-hidden="true"><i /><i /><i /><i /><i /></div>
-                <div className="letter-date">NOVEMBER 18 <span>✦</span> YOUR BIRTHDAY</div>
+                <div className="letter-date">NOVEMBER 19 <span>✦</span> YOUR BIRTHDAY</div>
                 <div className="letter-copy">{finalMessage.split('\n\n').map((paragraph, index) => index === 0 ? <p className="letter-salutation" key={paragraph}>{paragraph}</p> : <p key={paragraph}>{paragraph}</p>)}</div>
                 <div className="letter-signoff"><span>cheering for you, always</span><Heart size={18} aria-hidden="true" /></div>
                 <div className="letter-doodle" aria-hidden="true">✳</div>
