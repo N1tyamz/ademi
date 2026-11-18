@@ -425,7 +425,7 @@ export function BirthdayExperience() {
               <div className="window-bar"><span>hello_ademi.txt</span><span aria-hidden="true">▢ ×</span></div>
               <div className="start-window-content">
                 <div className="birthday-stamp"><span>19</span><small>NOV</small></div>
-                <p className="eyebrow"><span className="tiny-star">*</span> A NOTE FROM YOUR FAVORITE HUMAN (MAYBE)</p>
+                <p className="eyebrow"><span className="tiny-star">*</span> A NOTE TO MY FAVORITE HUMAN</p>
                 <h1 id="start-title">A little<br /><em>birthday</em><br />magic.</h1>
                 <p className="start-copy">Hey Ademi. Someone made a little corner of the internet just for you today.</p>
                 <button className="pixel-button primary-button" type="button" onClick={openBirthday}>
@@ -520,21 +520,26 @@ export function BirthdayExperience() {
               <button className="pixel-button note-button" type="button" onClick={() => setNoteOpen(true)}><Mail size={15} aria-hidden="true" /> READ NOTE <span className="note-pulse" aria-hidden="true" /></button>
             </div>
             <span className="flower-footer">SOME THINGS BLOOM RIGHT ON TIME <span aria-hidden="true">*</span></span>
-            {noteOpen && (
-              <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setNoteOpen(false) }}>
-                <section className="note-modal pixel-border" role="dialog" aria-modal="true" aria-labelledby="note-title">
-                  <div className="window-bar"><span>for_ademi.note</span><button type="button" onClick={() => setNoteOpen(false)} aria-label="Close note">×</button></div>
-                  <div className="note-modal-content">
-                    <span className="note-seal" aria-hidden="true">*</span>
-                    <span className="eyebrow">A NOTE FROM ME TO YOU</span>
-                    <h2 id="note-title">Happy birthday,<br /><em>Ademi.</em></h2>
-                    <p>{noteMessage}</p>
-                    <button className="pixel-button primary-button modal-next" type="button" onClick={openMixtape}>CLOSE &amp; CONTINUE <ArrowRight size={14} aria-hidden="true" /></button>
-                  </div>
-                </section>
-              </div>
-            )}
           </section>
+        )}
+
+        {stage === 3 && noteOpen && (
+          <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setNoteOpen(false) }}>
+            <section className="note-modal pixel-border" role="dialog" aria-modal="true" aria-labelledby="note-title">
+              <div className="window-bar"><span>for_ademi.note</span><button type="button" onClick={() => setNoteOpen(false)} aria-label="Close note">×</button></div>
+              <div className="note-modal-content">
+                <span className="note-seal" aria-hidden="true">*</span>
+                <span className="eyebrow">A NOTE FROM ME TO YOU</span>
+                <h2 id="note-title">Happy birthday,<br /><em>Ademi.</em></h2>
+                <p>{noteMessage}</p>
+                <figure className="note-flower">
+                  <img src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/PHOTO-2026-11-18-16-32-46-XilKcpKPhOs96JoqMViL6IqyzgfnA1.jpg" alt="A pastel bouquet illustration tied with a ribbon bearing Ademi’s name." />
+                  <figcaption>This is the actual flower connected to the meaning of your name, Ademi.</figcaption>
+                </figure>
+                <button className="pixel-button primary-button modal-next" type="button" onClick={openMixtape}>CLOSE &amp; CONTINUE <ArrowRight size={14} aria-hidden="true" /></button>
+              </div>
+            </section>
+          </div>
         )}
 
         {stage === 4 && (
@@ -612,7 +617,7 @@ export function BirthdayExperience() {
               <h1 id="final-title">A note to<br /><em>keep.</em></h1>
             </div>
             <article className="letter-card">
-              <div className="letter-top"><span>PERSONAL_NOTE.TXT</span><span><i className="letter-heart" /> OPENED WITH LOVE</span></div>
+              <div className="letter-top"><span>PERSONAL_NOTE.TXT</span><span><i className="letter-heart" /> OPEN WITH CARE</span></div>
               <div className="letter-paper">
                 <div className="letter-hole" aria-hidden="true"><i /><i /><i /><i /><i /></div>
                 <div className="letter-date">NOVEMBER 19 <span>*</span> YOUR BIRTHDAY</div>
