@@ -1,13 +1,11 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowRight, Check, Heart, Mail, Music2, Pause, Play, Volume2, VolumeX } from 'lucide-react'
+import { ArrowRight, Check, Heart, Mail, Music2, Pause, Play } from 'lucide-react'
 import { bouquetCaption, finalMessage, noteMessage, trackGroups, type Track } from './birthday-data'
 
 const stageLabels = ['Start', 'Make a wish', 'Flowers', 'Mixtape', 'A note for you']
 const candlePositions = [13, 30, 47, 64, 81]
-const ambientNotes = [261.63, 329.63, 392, 329.63, 293.66, 349.23, 392, 329.63]
-
 type ItunesTrack = {
   previewUrl?: string
   artworkUrl100?: string
@@ -23,7 +21,6 @@ export function BirthdayExperience() {
   const [micStatus, setMicStatus] = useState<'idle' | 'listening' | 'fallback'>('idle')
   const [micMessage, setMicMessage] = useState('')
   const [noteOpen, setNoteOpen] = useState(false)
-  const [muted, setMuted] = useState(false)
   const [activeTrackId, setActiveTrackId] = useState<string | null>(null)
   const [isTrackPlaying, setIsTrackPlaying] = useState(false)
   const [loadingTrackId, setLoadingTrackId] = useState<string | null>(null)
@@ -31,9 +28,6 @@ export function BirthdayExperience() {
   const [artworkByTrack, setArtworkByTrack] = useState<Record<string, string>>({})
 
   const audioContextRef = useRef<AudioContext | null>(null)
-  const ambientGainRef = useRef<GainNode | null>(null)
-  const ambientTimerRef = useRef<number | null>(null)
-  const ambientIndexRef = useRef(0)
   const microphoneRef = useRef<MediaStream | null>(null)
   const microphoneStatusRef = useRef<'idle' | 'listening' | 'fallback'>('idle')
   const blowTimeRef = useRef(0)
@@ -47,67 +41,6 @@ export function BirthdayExperience() {
     setMicMessage(message)
   }, [])
 
-  const startAmbientMusic = useCallback(async () => {
-    try {
-      let context = audioContextRef.current
-      if (!context) {
-        context = new window.AudioContext()
-        const master = context.createGain()
-        master.gain.value = 0.055
-        master.connect(context.destination)
-        ambientGainRef.current = master
-        audioContextRef.current = context
-
-        const lowDrone = context.createOscillator()
-        const softDrone = context.createOscillator()
-        const lowGain = context.createGain()
-        const softGain = context.createGain()
-        lowDrone.type = 'sine'
-        lowDrone.frequency.value = 110
-        softDrone.type = 'sine'
-        softDrone.frequency.value = 164.81
-        lowGain.gain.value = 0.2
-        softGain.gain.value = 0.08
-        lowDrone.connect(lowGain).connect(master)
-        softDrone.connect(softGain).connect(master)
-        lowDrone.start()
-        softDrone.start()
-
-        const playNote = () => {
-          const currentContext = audioContextRef.current
-          const currentMaster = ambientGainRef.current
-          if (!currentContext || !currentMaster) return
-          const oscillator = currentContext.createOscillator()
-          const envelope = currentContext.createGain()
-          oscillator.type = 'triangle'
-          oscillator.frequency.value = ambientNotes[ambientIndexRef.current % ambientNotes.length]
-          ambientIndexRef.current += 1
-          envelope.gain.setValueAtTime(0.0001, currentContext.currentTime)
-          envelope.gain.exponentialRampToValueAtTime(0.14, currentContext.currentTime + 0.035)
-          envelope.gain.exponentialRampToValueAtTime(0.0001, currentContext.currentTime + 0.58)
-          oscillator.connect(envelope).connect(currentMaster)
-          oscillator.start()
-          oscillator.stop(currentContext.currentTime + 0.6)
-        }
-
-        playNote()
-        ambientTimerRef.current = window.setInterval(playNote, 760)
-        audioContextRef.current = context
-      }
-      if (context.state === 'suspended') await context.resume()
-    } catch {
-      setMicMessage('Your browser could not start the ambient music, but the birthday surprise is still ready.')
-    }
-  }, [])
-
-  useEffect(() => {
-    const context = audioContextRef.current
-    const master = ambientGainRef.current
-    if (!context || !master) return
-    const shouldPauseAmbient = muted || (stage === 4 && isTrackPlaying)
-    master.gain.setTargetAtTime(shouldPauseAmbient ? 0 : 0.055, context.currentTime, 0.12)
-  }, [isTrackPlaying, muted, stage])
-
   const requestMicrophone = useCallback(async () => {
     if (microphoneRef.current) {
       setMicMode('listening', 'Your mic is ready. Give the candles a gentle blow—or tap them one by one.')
@@ -117,20 +50,26 @@ export function BirthdayExperience() {
       setMicMode('fallback', 'Microphone access is not available here. Tap each candle flame to blow it out.')
       return
     }
+    let stream: MediaStream | null = null
+    let context: AudioContext | null = null
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } })
+      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } })
+      context = new window.AudioContext()
+      await context.resume()
       microphoneRef.current = stream
+      audioContextRef.current = context
       setMicMode('listening', 'Your mic is ready. Give the candles a gentle blow—or tap them one by one.')
     } catch {
+      stream?.getTracks().forEach((track) => track.stop())
+      void context?.close()
       setMicMode('fallback', 'No mic? No problem. Tap each candle flame to blow it out.')
     }
   }, [setMicMode])
 
   const openBirthday = useCallback(() => {
     setStage(2)
-    void startAmbientMusic()
     void requestMicrophone()
-  }, [requestMicrophone, startAmbientMusic])
+  }, [requestMicrophone])
 
   const blowOutCandle = useCallback(() => {
     setCandlesOut((count) => Math.min(count + 1, candlePositions.length))
@@ -175,7 +114,6 @@ export function BirthdayExperience() {
 
   useEffect(() => {
     return () => {
-      if (ambientTimerRef.current !== null) window.clearInterval(ambientTimerRef.current)
       microphoneRef.current?.getTracks().forEach((track) => track.stop())
       void audioContextRef.current?.close()
       previewAudioRef.current?.pause()
@@ -274,12 +212,6 @@ export function BirthdayExperience() {
           <span>ADEMI.EXE</span>
         </div>
         <div className="topbar-actions">
-          {stage > 1 && (
-            <button className="sound-toggle pixel-button" type="button" onClick={() => setMuted((value) => !value)} aria-pressed={muted} aria-label={muted ? 'Unmute background music' : 'Mute background music'}>
-              {muted ? <VolumeX size={15} aria-hidden="true" /> : <Volume2 size={15} aria-hidden="true" />}
-              <span>{muted ? 'SOUND OFF' : 'SOUND ON'}</span>
-            </button>
-          )}
           <span className="version-label">BIRTHDAY BUILD <span>1.0</span></span>
         </div>
       </header>
