@@ -7,10 +7,14 @@ import { bouquetCaption, finalMessage, noteMessage, trackGroups, type Track } fr
 const stageLabels = ['Start', 'Make a wish', 'Flowers', 'Mixtape', 'A note for you']
 const candlePositions = [13, 30, 47, 64, 81]
 const ambientNotes = [261.63, 329.63, 392, 329.63, 293.66, 349.23, 392, 329.63]
+const normalizeTrackTitle = (value: string) => value.toLocaleLowerCase('en-US').replace(/[^a-z0-9]/g, '')
+const backgroundTrackId = 'halsey-colors'
+const totalTrackCount = trackGroups.reduce((count, group) => count + group.tracks.length, 0)
 
 type ItunesTrack = {
   previewUrl?: string
   artworkUrl100?: string
+  trackName?: string
 }
 
 type ItunesResponse = {
@@ -29,6 +33,10 @@ export function BirthdayExperience() {
   const [loadingTrackId, setLoadingTrackId] = useState<string | null>(null)
   const [trackError, setTrackError] = useState<{ id: string; message: string } | null>(null)
   const [artworkByTrack, setArtworkByTrack] = useState<Record<string, string>>({})
+  const [catalogLoading, setCatalogLoading] = useState(false)
+  const [catalogUnavailable, setCatalogUnavailable] = useState(false)
+  const [backgroundTrackUrl, setBackgroundTrackUrl] = useState<string | null>(null)
+  const [isBackgroundMusicPlaying, setIsBackgroundMusicPlaying] = useState(false)
 
   const audioContextRef = useRef<AudioContext | null>(null)
   const ambientGainRef = useRef<GainNode | null>(null)
@@ -38,13 +46,68 @@ export function BirthdayExperience() {
   const microphoneStatusRef = useRef<'idle' | 'listening' | 'fallback'>('idle')
   const blowTimeRef = useRef(0)
   const previewAudioRef = useRef<HTMLAudioElement | null>(null)
+  const backgroundAudioRef = useRef<HTMLAudioElement | null>(null)
   const previewSourcesRef = useRef<Record<string, string>>({})
+  const catalogPromiseRef = useRef<Promise<void> | null>(null)
   const previewRequestRef = useRef(0)
 
   const setMicMode = useCallback((mode: 'idle' | 'listening' | 'fallback', message = '') => {
     microphoneStatusRef.current = mode
     setMicStatus(mode)
     setMicMessage(message)
+  }, [])
+
+  const loadTrackCatalog = useCallback(() => {
+    if (catalogPromiseRef.current) return catalogPromiseRef.current
+
+    setCatalogLoading(true)
+    setCatalogUnavailable(false)
+    const request = (async () => {
+      const groupMatches = await Promise.all(trackGroups.map(async (group) => {
+        try {
+          const query = new URLSearchParams({ term: group.artist, entity: 'song', limit: '200' })
+          const response = await fetch(`https://itunes.apple.com/search?${query.toString()}`)
+          if (!response.ok) return []
+          const data = (await response.json()) as ItunesResponse
+          return group.tracks.flatMap((track) => {
+            const title = normalizeTrackTitle(track.title)
+            const result = data.results?.find((candidate) => normalizeTrackTitle(candidate.trackName ?? '') === title)
+            return result ? [{ trackId: track.id, result }] : []
+          })
+        } catch {
+          return []
+        }
+      }))
+      const initialMatches = groupMatches.flat()
+      const foundTrackIds = new Set(initialMatches.map(({ trackId }) => trackId))
+      const missingTracks = trackGroups.flatMap((group) => group.tracks).filter((track) => !foundTrackIds.has(track.id))
+      const fallbackMatches = await Promise.all(missingTracks.map(async (track) => {
+        try {
+          const query = new URLSearchParams({ term: `${track.artist} ${track.title}`, media: 'music', limit: '1' })
+          const response = await fetch(`https://itunes.apple.com/search?${query.toString()}`)
+          if (!response.ok) return []
+          const data = (await response.json()) as ItunesResponse
+          const title = normalizeTrackTitle(track.title)
+          const result = data.results?.find((candidate) => normalizeTrackTitle(candidate.trackName ?? '') === title) ?? data.results?.[0]
+          return result ? [{ trackId: track.id, result }] : []
+        } catch {
+          return []
+        }
+      }))
+      const matches = [...initialMatches, ...fallbackMatches.flat()]
+      const nextArtwork: Record<string, string> = {}
+      for (const { trackId, result } of matches) {
+        if (result.artworkUrl100) nextArtwork[trackId] = result.artworkUrl100
+        if (result.previewUrl) previewSourcesRef.current[trackId] = result.previewUrl
+      }
+      setArtworkByTrack((current) => ({ ...current, ...nextArtwork }))
+      setCatalogUnavailable(Object.keys(nextArtwork).length < totalTrackCount)
+      const backgroundPreview = matches.find(({ trackId }) => trackId === backgroundTrackId)?.result.previewUrl
+      if (backgroundPreview) setBackgroundTrackUrl(backgroundPreview)
+    })().finally(() => setCatalogLoading(false))
+
+    catalogPromiseRef.current = request
+    return request
   }, [])
 
   const startAmbientMusic = useCallback(async () => {
@@ -104,9 +167,29 @@ export function BirthdayExperience() {
     const context = audioContextRef.current
     const master = ambientGainRef.current
     if (!context || !master) return
-    const shouldPauseAmbient = muted || (stage === 4 && isTrackPlaying)
+    const shouldPauseAmbient = muted || (stage >= 4 && (isTrackPlaying || isBackgroundMusicPlaying))
     master.gain.setTargetAtTime(shouldPauseAmbient ? 0 : 0.055, context.currentTime, 0.12)
-  }, [isTrackPlaying, muted, stage])
+  }, [isBackgroundMusicPlaying, isTrackPlaying, muted, stage])
+
+  useEffect(() => {
+    const audio = backgroundAudioRef.current
+    if (!audio) return
+    audio.loop = true
+    audio.volume = 0.14
+    if (!backgroundTrackUrl) {
+      audio.pause()
+      return
+    }
+    if (audio.src !== backgroundTrackUrl) {
+      audio.src = backgroundTrackUrl
+      audio.load()
+    }
+    if (stage < 4 || muted || isTrackPlaying) {
+      audio.pause()
+      return
+    }
+    void audio.play().catch(() => setIsBackgroundMusicPlaying(false))
+  }, [backgroundTrackUrl, isTrackPlaying, muted, stage])
 
   const requestMicrophone = useCallback(async () => {
     if (microphoneRef.current) {
@@ -130,7 +213,14 @@ export function BirthdayExperience() {
     setStage(2)
     void startAmbientMusic()
     void requestMicrophone()
-  }, [requestMicrophone, startAmbientMusic])
+    void loadTrackCatalog()
+  }, [loadTrackCatalog, requestMicrophone, startAmbientMusic])
+
+  const openMixtape = useCallback(() => {
+    setNoteOpen(false)
+    setStage(4)
+    void loadTrackCatalog()
+  }, [loadTrackCatalog])
 
   const blowOutCandle = useCallback(() => {
     setCandlesOut((count) => Math.min(count + 1, candlePositions.length))
@@ -179,6 +269,7 @@ export function BirthdayExperience() {
       microphoneRef.current?.getTracks().forEach((track) => track.stop())
       void audioContextRef.current?.close()
       previewAudioRef.current?.pause()
+      backgroundAudioRef.current?.pause()
     }
   }, [])
 
@@ -209,20 +300,34 @@ export function BirthdayExperience() {
     setActiveTrackId(track.id)
     setLoadingTrackId(track.id)
     const requestId = ++previewRequestRef.current
-    const query = new URLSearchParams({ term: `${track.artist} ${track.title}`, media: 'music', limit: '1' })
 
     try {
-      const response = await fetch(`https://itunes.apple.com/search?${query.toString()}`)
-      if (!response.ok) throw new Error('preview')
-      const data = (await response.json()) as ItunesResponse
-      if (requestId !== previewRequestRef.current) return
-      const result = data.results?.[0]
-      if (result?.artworkUrl100) {
-        setArtworkByTrack((artwork) => ({ ...artwork, [track.id]: result.artworkUrl100 as string }))
+      let previewUrl = previewSourcesRef.current[track.id]
+      if (!previewUrl) {
+        await (catalogPromiseRef.current ?? loadTrackCatalog())
+        if (requestId !== previewRequestRef.current) return
+        previewUrl = previewSourcesRef.current[track.id]
       }
-      if (!result?.previewUrl) throw new Error('preview')
-      previewSourcesRef.current[track.id] = result.previewUrl
-      audio.src = result.previewUrl
+
+      if (!previewUrl) {
+        const query = new URLSearchParams({ term: `${track.artist} ${track.title}`, media: 'music', limit: '1' })
+        const response = await fetch(`https://itunes.apple.com/search?${query.toString()}`)
+        if (!response.ok) throw new Error('preview')
+        const data = (await response.json()) as ItunesResponse
+        if (requestId !== previewRequestRef.current) return
+        const result = data.results?.[0]
+        if (result?.artworkUrl100) {
+          setArtworkByTrack((artwork) => ({ ...artwork, [track.id]: result.artworkUrl100 as string }))
+        }
+        const fetchedPreviewUrl = result?.previewUrl
+        if (fetchedPreviewUrl) {
+          previewUrl = fetchedPreviewUrl
+          previewSourcesRef.current[track.id] = fetchedPreviewUrl
+        }
+      }
+
+      if (!previewUrl) throw new Error('preview')
+      audio.src = previewUrl
       audio.load()
       try {
         await audio.play()
@@ -239,7 +344,7 @@ export function BirthdayExperience() {
     } finally {
       if (requestId === previewRequestRef.current) setLoadingTrackId(null)
     }
-  }, [activeTrackId, isTrackPlaying])
+  }, [activeTrackId, isTrackPlaying, loadTrackCatalog])
 
   const finishMixtape = useCallback(() => {
     previewRequestRef.current += 1
@@ -264,9 +369,9 @@ export function BirthdayExperience() {
   return (
     <main className={`birthday-shell stage-${stage}`}>
       <div className="paper-grain" aria-hidden="true" />
-      <div className="floating-spark spark-one" aria-hidden="true">✳</div>
-      <div className="floating-spark spark-two" aria-hidden="true">✦</div>
-      <div className="floating-spark spark-three" aria-hidden="true">✧</div>
+      <div className="floating-spark spark-one" aria-hidden="true">*</div>
+      <div className="floating-spark spark-two" aria-hidden="true">*</div>
+      <div className="floating-spark spark-three" aria-hidden="true">*</div>
 
       <header className="topbar">
         <div className="brand-mark">
@@ -308,22 +413,22 @@ export function BirthdayExperience() {
 
         {stage === 1 && (
           <section className="start-stage" aria-labelledby="start-title">
-            <div className="start-doodle doodle-sun" aria-hidden="true">✳</div>
+            <div className="start-doodle doodle-sun" aria-hidden="true">*</div>
             <div className="start-doodle doodle-heart" aria-hidden="true"><Heart size={19} /></div>
             <div className="start-window">
               <div className="window-bar"><span>hello_ademi.txt</span><span aria-hidden="true">▢ ×</span></div>
               <div className="start-window-content">
                 <div className="birthday-stamp"><span>18</span><small>NOV</small></div>
-                <p className="eyebrow"><span className="tiny-star">✦</span> A NOTE FROM YOUR FAVORITE HUMAN (MAYBE)</p>
+                <p className="eyebrow"><span className="tiny-star">*</span> A NOTE FROM YOUR FAVORITE HUMAN (MAYBE)</p>
                 <h1 id="start-title">A little<br /><em>birthday</em><br />magic.</h1>
                 <p className="start-copy">Hey Ademi. Someone made a little corner of the internet just for you today.</p>
                 <button className="pixel-button primary-button" type="button" onClick={openBirthday}>
                   <span>OPEN IT</span><ArrowRight size={16} aria-hidden="true" />
                 </button>
-                <span className="button-hint">NO PASSWORD NEEDED <span aria-hidden="true">♡</span></span>
+                <span className="button-hint">NO PASSWORD NEEDED <Heart size={10} aria-hidden="true" /></span>
               </div>
             </div>
-            <div className="start-footnote"><span className="pixel-flower-mini" aria-hidden="true">✿</span> MADE WITH A LITTLE TOO MUCH HEART <span className="footnote-line" /></div>
+            <div className="start-footnote"><span className="pixel-flower-mini" aria-hidden="true">*</span> MADE WITH A LITTLE TOO MUCH HEART <span className="footnote-line" /></div>
           </section>
         )}
 
@@ -338,9 +443,9 @@ export function BirthdayExperience() {
             <div className="cake-panel pixel-border">
               <div className="cake-panel-top"><span>WISH.EXE</span><span className="cake-status"><i /> READY</span></div>
               <div className="cake-scene">
-                <div className="cake-spark cake-spark-a" aria-hidden="true">✦</div>
-                <div className="cake-spark cake-spark-b" aria-hidden="true">✧</div>
-                <div className="cake-spark cake-spark-c" aria-hidden="true">✳</div>
+                <div className="cake-spark cake-spark-a" aria-hidden="true">*</div>
+                <div className="cake-spark cake-spark-b" aria-hidden="true">*</div>
+                <div className="cake-spark cake-spark-c" aria-hidden="true">*</div>
                 <div className="cake">
                   <div className="candles-row">
                     {candlePositions.map((position, index) => {
@@ -361,7 +466,7 @@ export function BirthdayExperience() {
                   <div className="cake-plate"><span /></div>
                 </div>
                 <div className="cake-shadow" aria-hidden="true" />
-                {candlesOut === candlePositions.length && <div className="wish-banner" role="status">MAKE A WISH, ADEMI! <span>✦</span></div>}
+                {candlesOut === candlePositions.length && <div className="wish-banner" role="status">MAKE A WISH, ADEMI! <span>*</span></div>}
                 {candlesOut === candlePositions.length && <div className="confetti" aria-hidden="true">{Array.from({ length: 30 }, (_, index) => <i key={index} style={{ left: `${(index * 37) % 100}%`, animationDelay: `-${(index % 17) / 8}s` }} />)}</div>}
               </div>
               <div className="cake-panel-bottom">
@@ -381,15 +486,18 @@ export function BirthdayExperience() {
               <h1 id="flowers-title">Picked just<br /><em>for you.</em></h1>
             </div>
             <div className="bouquet-card">
-              <div className="bouquet-spark spark-left" aria-hidden="true">✧</div>
-              <div className="bouquet-spark spark-right" aria-hidden="true">✳</div>
+              <div className="bouquet-spark spark-left" aria-hidden="true">*</div>
+              <div className="bouquet-spark spark-right" aria-hidden="true">*</div>
               <div className="bouquet-scene" role="img" aria-label="A hand-drawn pixel bouquet tied with a ribbon for Ademi">
-                <div className="bouquet-stems"><i /><i /><i /><i /><i /></div>
+                <div className="bouquet-stems"><i /><i /><i /><i /><i /><i /><i /><i /></div>
                 <div className="flower flower-one"><i /><b /></div>
                 <div className="flower flower-two"><i /><b /></div>
                 <div className="flower flower-three"><i /><b /></div>
                 <div className="flower flower-four"><i /><b /></div>
                 <div className="flower flower-five"><i /><b /></div>
+                <div className="flower flower-six"><i /><b /></div>
+                <div className="flower flower-seven"><i /><b /></div>
+                <div className="flower flower-eight"><i /><b /></div>
                 <div className="leaf leaf-one" /><div className="leaf leaf-two" /><div className="leaf leaf-three" />
                 <div className="bouquet-wrap"><span /><i /><i /></div>
                 <div className="bouquet-ribbon">ADEMI</div>
@@ -400,17 +508,17 @@ export function BirthdayExperience() {
               </div>
               <button className="pixel-button note-button" type="button" onClick={() => setNoteOpen(true)}><Mail size={15} aria-hidden="true" /> READ NOTE <span className="note-pulse" aria-hidden="true" /></button>
             </div>
-            <span className="flower-footer">SOME THINGS BLOOM RIGHT ON TIME <span aria-hidden="true">✿</span></span>
+            <span className="flower-footer">SOME THINGS BLOOM RIGHT ON TIME <span aria-hidden="true">*</span></span>
             {noteOpen && (
               <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setNoteOpen(false) }}>
                 <section className="note-modal pixel-border" role="dialog" aria-modal="true" aria-labelledby="note-title">
                   <div className="window-bar"><span>for_ademi.note</span><button type="button" onClick={() => setNoteOpen(false)} aria-label="Close note">×</button></div>
                   <div className="note-modal-content">
-                    <span className="note-seal" aria-hidden="true">✿</span>
+                    <span className="note-seal" aria-hidden="true">*</span>
                     <span className="eyebrow">A NOTE FROM ME TO YOU</span>
                     <h2 id="note-title">Happy birthday,<br /><em>Ademi.</em></h2>
                     <p>{noteMessage}</p>
-                    <button className="pixel-button primary-button modal-next" type="button" onClick={() => { setNoteOpen(false); setStage(4) }}>CLOSE &amp; CONTINUE <ArrowRight size={14} aria-hidden="true" /></button>
+                    <button className="pixel-button primary-button modal-next" type="button" onClick={openMixtape}>CLOSE &amp; CONTINUE <ArrowRight size={14} aria-hidden="true" /></button>
                   </div>
                 </section>
               </div>
@@ -426,23 +534,26 @@ export function BirthdayExperience() {
               <p className="mixtape-intro">A mix of your favorites and the songs I dedicate to you—because every single one of these reminds me of your energy, your resilience, and the person you’re becoming.</p>
             </div>
 
-            <div className="mixtape-deck pixel-border">
-              <div className="deck-topline"><span><Music2 size={13} aria-hidden="true" /> PLAYLIST_18.NOV</span><span>15 TRACKS</span></div>
+            <div className={`mixtape-deck pixel-border ${isBackgroundMusicPlaying || isTrackPlaying ? 'is-playing' : ''}`}>
+              <div className="deck-topline"><span><Music2 size={13} aria-hidden="true" /> PLAYLIST_18.NOV</span><span>{totalTrackCount} TRACKS</span></div>
               <div className="cassette-display">
-                <div className="cassette-label"><span>FOR ADEMI</span><span>SIDE A <i>✦</i> SIDE B</span></div>
+                <div className="cassette-label"><span>FOR ADEMI</span><span>SIDE A <i>*</i> SIDE B</span></div>
                 <div className="cassette-reels" aria-hidden="true"><span><i /></span><b /><span><i /></span></div>
                 <div className="cassette-tape-line" aria-hidden="true" />
               </div>
-              <div className="deck-footer"><span>NOW PLAYING</span><span>{activeTrackId ? trackGroups.flatMap((group) => group.tracks).find((track) => track.id === activeTrackId)?.title ?? 'YOUR MIX' : 'PRESS PLAY TO BEGIN'}</span></div>
+              <div className="deck-footer"><span>NOW PLAYING</span><span>{isBackgroundMusicPlaying ? 'COLORS · HALSEY' : activeTrackId ? trackGroups.flatMap((group) => group.tracks).find((track) => track.id === activeTrackId)?.title ?? 'YOUR MIX' : 'PRESS PLAY TO BEGIN'}</span></div>
             </div>
             <audio ref={previewAudioRef} preload="none" onEnded={() => setIsTrackPlaying(false)} aria-label="Song preview audio player" />
+            <audio ref={backgroundAudioRef} preload="none" loop onPlay={() => setIsBackgroundMusicPlaying(true)} onPause={() => setIsBackgroundMusicPlaying(false)} aria-label="Halsey Colors background soundtrack" />
+            {catalogLoading && <p className="catalog-status" role="status">Loading album covers and previews…</p>}
+            {catalogUnavailable && !catalogLoading && <p className="catalog-status" role="status">Some album covers are unavailable right now, but the mix is ready.</p>}
 
             <div className="track-groups">
               {trackGroups.map((group, groupIndex) => (
                 <section className="artist-group" key={group.artist} aria-labelledby={`artist-${groupIndex}`}>
                   <div className="artist-heading">
                     <div><span className="artist-index">0{groupIndex + 1}</span><h2 id={`artist-${groupIndex}`}>{group.artist}</h2></div>
-                    {group.featured && <span className="featured-badge">✦ {group.featured}</span>}
+                    {group.featured && <span className="featured-badge">* {group.featured}</span>}
                   </div>
                   <div className="track-grid">
                     {group.tracks.map((track, trackIndex) => {
@@ -451,13 +562,14 @@ export function BirthdayExperience() {
                       const isLoading = loadingTrackId === track.id
                       const artwork = artworkByTrack[track.id]
                       return (
-                        <article className={`track-card ${track.featured ? 'track-featured' : ''}`} key={track.id}>
+                        <article className={`track-card ${track.featured ? 'track-featured' : ''} ${isPlaying ? 'is-playing' : ''}`} key={track.id}>
                           <div className={`album-art album-${track.color}`}>
-                            {artwork ? <img src={artwork} alt={`${track.album} album artwork`} loading="lazy" /> : <div className="fallback-art" aria-label={`${track.album} album art placeholder`}><span>{track.artist.split(' ').map((word) => word[0]).join('').slice(0, 2)}</span><i>✳</i><b>{String(trackIndex + 1).padStart(2, '0')}</b></div>}
+                            {artwork ? <img src={artwork} alt={`${track.album} album artwork`} loading="lazy" /> : <div className="fallback-art" role="img" aria-label={`${track.album} album art placeholder`}><span>{track.artist.split(' ').map((word) => word[0]).join('').slice(0, 2)}</span><i>*</i><b>{String(trackIndex + 1).padStart(2, '0')}</b></div>}
+                            <span className="album-playing-indicator" aria-hidden="true"><i /><i /><i /></span>
                             <span className="album-chip">{track.album}</span>
                           </div>
                           <div className="track-details">
-                            <div className="track-title-row"><h3>{track.title}</h3>{track.featured && <span className="main-song">★ MAIN SONG</span>}</div>
+                            <div className="track-title-row"><h3>{track.title}</h3>{track.featured && <span className="main-song">* MAIN SONG</span>}</div>
                             {track.featured && <p className="track-feature-note">{track.dedication}</p>}
                             <blockquote>{track.lyric}</blockquote>
                             {!track.featured && <p className="track-dedication">{track.dedication}</p>}
@@ -476,7 +588,7 @@ export function BirthdayExperience() {
             </div>
 
             <div className="mixtape-endcap">
-              <span>THAT&apos;S YOUR MIX <span aria-hidden="true">♡</span></span>
+              <span>THAT&apos;S YOUR MIX <Heart size={12} fill="currentColor" aria-hidden="true" /></span>
               <button className="pixel-button primary-button" type="button" onClick={finishMixtape}>READ YOUR FINAL MESSAGE <ArrowRight size={15} aria-hidden="true" /></button>
             </div>
           </section>
@@ -492,15 +604,15 @@ export function BirthdayExperience() {
               <div className="letter-top"><span>PERSONAL_NOTE.TXT</span><span><i className="letter-heart" /> OPENED WITH LOVE</span></div>
               <div className="letter-paper">
                 <div className="letter-hole" aria-hidden="true"><i /><i /><i /><i /><i /></div>
-                <div className="letter-date">NOVEMBER 18 <span>✦</span> YOUR BIRTHDAY</div>
+                <div className="letter-date">NOVEMBER 18 <span>*</span> YOUR BIRTHDAY</div>
                 <div className="letter-copy">{finalMessage.split('\n\n').map((paragraph, index) => index === 0 ? <p className="letter-salutation" key={paragraph}>{paragraph}</p> : <p key={paragraph}>{paragraph}</p>)}</div>
                 <div className="letter-signoff"><span>cheering for you, always</span><Heart size={18} aria-hidden="true" /></div>
-                <div className="letter-doodle" aria-hidden="true">✳</div>
+                <div className="letter-doodle" aria-hidden="true">*</div>
               </div>
-              <div className="letter-bottom"><span>KEEP THIS SOMEWHERE SOFT</span><span>♡</span></div>
+              <div className="letter-bottom"><span>KEEP THIS SOMEWHERE SOFT</span><Heart size={11} fill="currentColor" aria-hidden="true" /></div>
             </article>
             <div className="replay-row"><span>THE END (BUT YOU CAN COME BACK ANYTIME)</span><button className="pixel-button replay-button" type="button" onClick={replayFromStart}>↺ REPLAY FROM START</button></div>
-            <p className="final-signature">BUILT FOR ADEMI <span>✦</span> WITH ALL THE GOOD THINGS</p>
+            <p className="final-signature">BUILT FOR ADEMI <span>*</span> WITH ALL THE GOOD THINGS</p>
           </section>
         )}
       </div>
