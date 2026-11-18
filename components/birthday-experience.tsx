@@ -6,15 +6,6 @@ import { bouquetCaption, finalMessage, noteMessage, trackGroups, type Track } fr
 
 const stageLabels = ['Start', 'Make a wish', 'Flowers', 'Mixtape', 'A note for you']
 const candlePositions = [13, 30, 47, 64, 81]
-type ItunesTrack = {
-  previewUrl?: string
-  artworkUrl100?: string
-}
-
-type ItunesResponse = {
-  results?: ItunesTrack[]
-}
-
 const backgroundTrack = trackGroups[0].tracks[0]
 
 export function BirthdayExperience({ initialArtwork }: { initialArtwork: Record<string, string> }) {
@@ -167,18 +158,16 @@ export function BirthdayExperience({ initialArtwork }: { initialArtwork: Record<
     setActiveTrackId(track.id)
     setLoadingTrackId(track.id)
     const requestId = ++previewRequestRef.current
-    const query = new URLSearchParams({ term: `${track.artist} ${track.title}`, media: 'music', limit: '1' })
-
     try {
-      const response = await fetch(`https://itunes.apple.com/search?${query.toString()}`)
+      const query = new URLSearchParams({ artist: track.artist, title: track.title, album: track.album })
+      const response = await fetch(`/api/music/preview?${query.toString()}`)
       if (!response.ok) throw new Error('preview')
-      const data = (await response.json()) as ItunesResponse
+      const result = (await response.json()) as { previewUrl: string | null; artworkUrl: string | null }
       if (requestId !== previewRequestRef.current) return
-      const result = data.results?.[0]
-      if (result?.artworkUrl100) {
-        setArtworkByTrack((artwork) => ({ ...artwork, [track.id]: result.artworkUrl100 as string }))
+      if (result.artworkUrl) {
+        setArtworkByTrack((artwork) => ({ ...artwork, [track.id]: result.artworkUrl as string }))
       }
-      if (!result?.previewUrl) throw new Error('preview')
+      if (!result.previewUrl) throw new Error('preview')
       previewSourcesRef.current[track.id] = result.previewUrl
       audio.src = result.previewUrl
       audio.load()
