@@ -347,7 +347,8 @@ export function BirthdayExperience({ initialArtwork }: { initialArtwork: Record<
             <div className="bouquet-card">
               <div className="bouquet-spark spark-left" aria-hidden="true">✧</div>
               <div className="bouquet-spark spark-right" aria-hidden="true">✳</div>
-              <div className="bouquet-scene" role="img" aria-label="A hand-drawn pixel bouquet tied with a ribbon for Ademi">
+              <div className="bouquet-scene" role="img" aria-label="A hand-painted bouquet of blush peonies, coral roses, apricot ranunculus, daisies, and garden foliage wrapped for Ademi">
+                <img className="botanical-bouquet" src="/ademi-garden-bouquet.png" alt="" aria-hidden="true" />
                 <div className="bouquet-stems"><i /><i /><i /><i /><i /><i /><i /><i /></div>
                 <div className="flower flower-one"><i /><b /></div>
                 <div className="flower flower-two"><i /><b /></div>
